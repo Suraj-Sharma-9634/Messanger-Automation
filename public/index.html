@@ -1,0 +1,107 @@
+<!-- === public/index.html === -->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Messenger Control Panel</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      background: #f0f0f0;
+    }
+    #chat {
+      background: white;
+      padding: 10px;
+      border: 1px solid #ccc;
+      height: 300px;
+      overflow-y: auto;
+      margin-top: 10px;
+    }
+    textarea {
+      width: 300px;
+      height: 50px;
+    }
+    input {
+      margin: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Messenger Control Panel</h2>
+
+  <label>Sender ID:</label>
+  <select id="senderSelect"></select><br>
+
+  <input id="fbToken" placeholder="Facebook Page Token" /><br>
+  <input id="aiKey" placeholder="Gemini API Key" /><br>
+  <input id="systemPrompt" placeholder="System Prompt (optional)" /><br>
+
+  <textarea id="message" placeholder="Your message"></textarea><br>
+
+  <button onclick="sendMessage()">Send</button>
+  <button onclick="assignAI(true)">Assign to AI</button>
+  <button onclick="assignAI(false)">Remove AI</button>
+  <button onclick="broadcastMessage()">Broadcast</button>
+  <button onclick="showHistory()">Show History</button>
+
+  <div id="chat"></div>
+
+  <script>
+    const socket = io();
+
+    socket.on("message", ({ senderId, message }) => {
+      const div = document.getElementById("chat");
+      div.innerHTML += `<p><strong>${senderId}:</strong> ${message}</p>`;
+      div.scrollTop = div.scrollHeight;
+    });
+
+    socket.on("senderList", (senders) => {
+      const select = document.getElementById("senderSelect");
+      select.innerHTML = "";
+      senders.forEach(id => {
+        const opt = document.createElement("option");
+        opt.value = id;
+        opt.textContent = id;
+        select.appendChild(opt);
+      });
+    });
+
+    function getSenderId() {
+      return document.getElementById("senderSelect").value;
+    }
+
+    function sendMessage() {
+      const senderId = getSenderId();
+      const fbToken = document.getElementById("fbToken").value;
+      const message = document.getElementById("message").value;
+      socket.emit("send", { senderId, message, fbToken });
+    }
+
+    function assignAI(assign) {
+      const senderId = getSenderId();
+      const fbToken = document.getElementById("fbToken").value;
+      const aiKey = document.getElementById("aiKey").value;
+      const systemPrompt = document.getElementById("systemPrompt").value;
+      socket.emit("assignAI", { senderId, fbToken, aiKey, assignToAI: assign, systemPrompt });
+    }
+
+    function broadcastMessage() {
+      const fbToken = document.getElementById("fbToken").value;
+      const message = document.getElementById("message").value;
+      socket.emit("broadcast", { message, fbToken });
+    }
+
+    function showHistory() {
+      const senderId = getSenderId();
+      socket.emit("getHistory", senderId, (history) => {
+        const div = document.getElementById("chat");
+        div.innerHTML += `<hr><strong>History with ${senderId}:</strong>`;
+        history.forEach(entry => {
+          div.innerHTML += `<p><em>${entry.from}:</em> ${entry.text}</p>`;
+        });
+      });
+    }
+  </script>
+</body>
+</html>
