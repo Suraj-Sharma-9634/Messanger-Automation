@@ -7,18 +7,24 @@ const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fet
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIO(server);
+const io = socketIO(server, {
+  cors: {
+    origin: "*", // Allow frontend apps from any origin
+    methods: ["GET", "POST"]
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 
-app.use(bodyParser.json());
-app.use(express.static('public'));
+// Middleware
+app.use(bodyParser.json()); // Parse JSON requests
 
+// === Data Storage ===
 const sessionMap = new Map();
 let connectedSenders = new Set();
 const messageHistory = new Map();
 
-// Facebook Webhook Verification
+// === Webhook Verification ===
 app.get('/webhook', (req, res) => {
   const VERIFY_TOKEN = "hello";
   const mode = req.query["hub.mode"];
@@ -33,13 +39,14 @@ app.get('/webhook', (req, res) => {
   }
 });
 
-// Facebook Webhook Event Handling
+// === Webhook Receiver ===
 app.post('/webhook', (req, res) => {
   const body = req.body;
   if (body.object === 'page') {
     body.entry.forEach(entry => {
       const webhookEvent = entry.messaging[0];
       const senderId = webhookEvent.sender.id;
+
       if (webhookEvent.message && webhookEvent.message.text) {
         const messageText = webhookEvent.message.text;
         console.log("Received:", messageText);
@@ -68,9 +75,9 @@ app.post('/webhook', (req, res) => {
   }
 });
 
-// Socket.IO Events
+// === Socket.IO Events ===
 io.on("connection", (socket) => {
-  console.log("Client connected");
+  console.log("Frontend client connected");
 
   socket.emit("senderList", Array.from(connectedSenders));
 
@@ -98,7 +105,7 @@ io.on("connection", (socket) => {
   });
 });
 
-// Send message to Facebook user
+// === Send Message to Facebook User ===
 async function sendMessage(senderId, message, fbToken) {
   const url = `https://graph.facebook.com/v18.0/me/messages?access_token=${fbToken}`;
   const payload = {
@@ -118,7 +125,7 @@ async function sendMessage(senderId, message, fbToken) {
   }
 }
 
-// Send prompt to Gemini AI
+// === AI Response via Gemini ===
 async function sendToGemini(apiKey, userText, systemPrompt) {
   try {
     const parts = systemPrompt ? [{ text: systemPrompt }, { text: userText }] : [{ text: userText }];
